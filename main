@@ -1,0 +1,200 @@
+#include <iostream>
+#include <iomanip>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
+using namespace std;
+
+struct Server {
+    int serverId;
+    int mtbf;
+    bool isUp;
+    double lambda;
+    int totalUptime;
+    int totalDowntime;
+    int failCount;
+    int nextFailTime;
+    int restoreTime;
+};
+
+int main() {
+    //getting random number each time program runs, and setting # of servers to 5
+    srand(time(0));
+    const int NUM_SERVERS = 5;
+    const int RESTORE_TIME = 2;
+    const int SIM_RUNS = 5;
+
+    //creating array of the struct type to hold servers
+    Server servers[NUM_SERVERS];
+
+    //creating array to hold total values of uptime/downtime/failcount
+    int allServersUpTime[NUM_SERVERS] = {0};
+    int allServersDownTime[NUM_SERVERS] = {0};
+    int allServersFail[NUM_SERVERS] = {0};
+
+    //creating variable to hold time till total system failure
+    int totalSystemFailTime = 0;
+
+    for (int i = 0; i < NUM_SERVERS; i++) {
+        servers[i].serverId = i;
+        servers[i].mtbf = rand() % 11 + 10; //getting a number that is 10 <= Ti <= 20
+        servers[i].isUp = true;
+        servers[i].lambda = 1.0 / servers[i].mtbf;
+
+        double u = static_cast<double>(rand()) / RAND_MAX;
+
+        servers[i].nextFailTime = static_cast<int>(log(1.0 - u) / servers[i].lambda) * -1;
+
+        if (servers[i].nextFailTime < 1) {
+            servers[i].nextFailTime = 1;
+        }
+
+        servers[i].totalUptime = 0; //starting at 0 since no sim has happened since creation
+        servers[i].totalDowntime = 0; //starting at 0 since no sim has happened since creation
+        servers[i].failCount = 0;
+    }
+
+    //Creating the SIM runs
+    for (int i = 0; i < SIM_RUNS; i++) {
+        //resetting the servers for each SIM run
+        for (int j = 0; j < NUM_SERVERS; j++) {
+            servers[j].isUp = true;
+            servers[j].totalUptime = 0;
+            servers[j].totalDowntime = 0;
+            servers[j].failCount = 0;
+
+            double u = static_cast<double>(rand()) /RAND_MAX;
+            servers[j].nextFailTime = static_cast<int>(log(1.0 - u) / servers[j].lambda) * -1;
+
+            if (servers[j].nextFailTime < 1) {
+                servers[j].nextFailTime = 1;
+            }
+        }
+
+        //creating a variable to track when all servers are down
+        bool allDown = false;
+        int currentTime = 0;
+
+        //printing server labels
+        cout << endl;
+        cout << "      | S00  | S01  | S02  | S03  | S04  |" << endl;
+        cout << "-------------------------------------------" << endl;
+
+        //printing when server is UP or DOWN
+        cout << right << setw(5) << currentTime << " | ";
+        for (int i = 0; i < NUM_SERVERS; i++) {
+            if (servers[i].isUp) {
+                cout << left << setw(4) << "UP" << " | ";
+            }
+            else {
+                cout << left << setw(4) << "DOWN" << " | ";
+            }
+        }
+        cout << endl;
+
+        while(!allDown) {
+
+            //tracking total uptime/downtime for each server
+            for (int i = 0; i < NUM_SERVERS; i++) {
+                if (servers[i].isUp) {
+                    servers[i].totalUptime++;
+                }
+                else {
+                    servers[i].totalDowntime++;
+                }
+            }
+
+            currentTime++;
+            bool stateChanged = false;
+
+            for(int i = 0; i < NUM_SERVERS; i++) {
+                if (servers[i].isUp && currentTime == servers[i].nextFailTime) {
+                    servers[i].isUp = false;
+                    servers[i].failCount++;
+                    servers[i].restoreTime = currentTime + RESTORE_TIME;
+                    stateChanged = true;
+                }
+
+                if (!servers[i].isUp && currentTime == servers[i].restoreTime) {
+                    bool anotherUp = false;
+
+                    for (int j = 0; j < NUM_SERVERS; j++) {
+                        if (j != i && servers[j].isUp) {
+                            anotherUp = true;
+                        }
+                    }
+
+                    if (anotherUp) {
+                        servers[i].isUp = true;
+                        stateChanged = true;
+                        double u = static_cast<double>(rand()) / RAND_MAX;
+                        int failInterval = static_cast<int>(log(1.0 - u) / servers[i].lambda) * -1;
+
+                        if (failInterval < 1) {
+                            failInterval = 1;
+                        }
+
+                        servers[i].nextFailTime = currentTime + failInterval;
+                    }
+                }
+            }
+
+            //printing server states when its state is changed
+            if (stateChanged) {
+                cout << right << setw(5) << currentTime << " | ";
+                for(int i = 0; i < NUM_SERVERS; i++) {
+                    if (servers[i].isUp) {
+                        cout << left << setw(4) << "UP" << " | ";
+                    }
+                    else {
+                        cout << left << setw(4) << "DOWN" << " | ";
+                    }
+                }
+                cout << endl;
+            }
+
+            //checking if the entire system is DOWN
+            allDown = true;
+
+            //iterating through for-loop to check if the servers are down
+            for (int i = 0; i < NUM_SERVERS; i++) {
+                if (servers[i].isUp) {
+                    allDown = false;
+                }
+            }
+        }
+
+        //adding total system failure time from SIM RUNS
+        totalSystemFailTime += currentTime;
+
+        //adding each SIM Run results to total
+        for (int j = 0; j < NUM_SERVERS; j++) {
+            allServersUpTime[j] += servers[j].totalUptime;
+            allServersDownTime[j] += servers[j].totalDowntime;
+            allServersFail[j] += servers[j].failCount;
+        }
+    }
+
+    //calculating avg time till total system fail
+    double avgSystemFailTime = static_cast<double>(totalSystemFailTime) / SIM_RUNS;
+
+    //Formated Final Statistics for SIM RUNS
+    cout << left << setw(7) << "Server" << "| " << setw(11) << "Avg Uptime" << "| " << setw(13) << "Avg Downtime"
+         << "| " << setw(15) << "Availability" << "| " << "MTBF" << endl;
+    cout << "-------------------------------------------------------------" << endl;
+
+    for (int i = 0; i < NUM_SERVERS; i ++) {
+        double avgUpTime = static_cast<double>(allServersUpTime[i]) / SIM_RUNS;
+        double avgDownTime = static_cast<double> (allServersDownTime[i]) / SIM_RUNS;
+        double availability = avgUpTime / (avgUpTime + avgDownTime) * 100;
+        double serversMtbf = static_cast<double>(allServersUpTime[i]) / allServersFail[i];
+
+        cout << "S0" << servers[i].serverId << "    | " << left << fixed << setprecision(1) << setw(11)
+             << avgUpTime << "| " << setw(13)
+             << avgDownTime << "| " << right << fixed << setprecision(2) << setw(13) << fixed << setprecision(2)
+             << availability << "% " << "| "
+             << setw(5) << fixed << setprecision(2) << serversMtbf << endl;
+    }
+
+    return 0;
+}
